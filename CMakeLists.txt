@@ -1,13 +1,21 @@
-cmake_minimum_required(VERSION 3.2)
+cmake_minimum_required(VERSION 3.5)
 
 project(bayan VERSION 0.0.$ENV{TRAVIS_BUILD_NUMBER})
 
 add_executable(bayan main.cpp)
 
+find_package(Boost COMPONENTS program_options filesystem system REQUIRED)
+
+include_directories(${Boost_INCLUDE_DIR})
+
 set_target_properties(bayan PROPERTIES
 	CXX_STANDARD 14
 	CXX_STANDARD_REQUIRED ON
 	COMPILE_OPTIONS "-Wpedantic;-Wall;-Wextra"
+)
+
+target_link_libraries(bayan
+	${Boost_LIBRARIES}
 )
 
 install(TARGETS bayan RUNTIME DESTINATION bin)
