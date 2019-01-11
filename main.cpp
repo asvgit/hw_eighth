@@ -1,9 +1,12 @@
 #include <iostream>
 #include <vector>
+#include <memory>
+#include <boost/filesystem/operations.hpp>
 #include <boost/filesystem/path.hpp>
 #include <boost/program_options.hpp>
 
 namespace po = boost::program_options;
+
 using string = std::string;
 using StringVec = std::vector<string>;
 
@@ -35,22 +38,55 @@ struct ProgramOptions {
 	}
 };
 
+namespace fs = boost::filesystem;
+
+class Matcher {};
+
+using OptPtr = std::shared_ptr<ProgramOptions>;
+using MatchPtr = std::shared_ptr<Matcher>;
+
+class DirTraverser {
+public:
+	DirTraverser(const OptPtr& opt, const MatchPtr &match)
+		: m_opt(opt), m_match(match) {}
+
+	void operator() () {
+		for (auto &d : m_opt->inc_dir) {
+			fs::path path(d);
+			if (!fs::exists(path)) {
+				std::cerr << "Failed to find: " << d << std::endl;
+				continue;
+			}
+			if (!fs::is_directory(path)) {
+				std::cerr << "Is not directory: " << d << std::endl;
+				continue;
+			}
+
+			std::cout << "Target dir: " << d << std::endl;
+
+			fs::directory_iterator end_it;
+			for (fs::directory_iterator it(path); it != end_it; ++it) {
+				std::cout << "\t" << it->path().filename() << std::endl;
+			}
+		}
+		if (m_opt->var_map.count("hash-algorithm")) {
+			std::cout << m_opt->algorithm << std::endl;
+		}
+	}
+private:
+	OptPtr m_opt;
+	MatchPtr m_match;
+};
+
 int main(int ac, char* av[]) {
 	try {
-
-		ProgramOptions opt(ac, av);
-		if (opt.var_map.count("help")) {
-			std::cout << opt.desc << std::endl;
+		auto opt = std::make_shared<ProgramOptions>(ac, av);
+		if (opt->var_map.count("help")) {
+			std::cout << opt->desc << std::endl;
 			return 0;
 		}
-
-		for (auto &d : opt.inc_dir) {
-			std::cout << d << std::endl;
-		}
-		if (opt.var_map.count("hash-algorithm")) {
-			std::cout << opt.algorithm << std::endl;
-		}
-
+		DirTraverser dt(opt, std::make_shared<Matcher>());
+		dt();
 	} catch(const std::exception &e) {
 		std::cerr << e.what() << std::endl;
 	} catch(...) {
