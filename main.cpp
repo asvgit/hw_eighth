@@ -51,9 +51,12 @@ class Matcher {
 
 		File(const string &file, const size_t s) : full_name(file), size(s), stream(file) {}
 	};
+
 	using FilePtr = std::shared_ptr<File>;
+
 public:
 	Matcher(const int block) : m_block_size(block) {}
+
 	void AddFile(const string &filename, const size_t size) {
 		FilePtr new_file(new File(filename, size));
 		for (auto &fv : m_files) {
@@ -67,6 +70,15 @@ public:
 		m_files.push_back(std::vector<FilePtr>());
 		m_files.back().push_back(new_file);
 	}
+
+	void Print() {
+		for (auto &vf : m_files) {
+			for (auto &f : vf)
+				std::cout << f->full_name << std::endl;
+			std::cout << std::endl;
+		}
+	}
+
 private:
 	int m_block_size;
 	std::vector<std::vector<FilePtr>> m_files;
@@ -98,9 +110,9 @@ private:
 			const int buf_size = end - start;
 			buf.resize(buf_size);
 			file->stream.read(&buf[0], buf_size);
-			std::cout << "Save spec '" << buf << "' for file: " << file->full_name << std::endl;
+			std::cout << "Save spec for file: " << file->full_name << std::endl;
 			file->spec.push_back(buf);
-			return buf;
+			return file->spec.back();
 		}
 		std::cerr << "Fail read file " << file->full_name << std::endl;
 		throw;
@@ -131,6 +143,9 @@ public:
 			else
 				TraverseDir(path);
 		}
+
+		std::cout << "Print groups" << std::endl;
+		m_match->Print();
 		// if (m_opt->var_map.count("hash-algorithm")) {
 		//     std::cout << m_opt->algorithm << std::endl;
 		// }
@@ -163,7 +178,7 @@ int main(int ac, char* av[]) {
 			std::cout << opt->desc << std::endl;
 			return 0;
 		}
-		DirTraverser dt(opt, std::make_shared<Matcher>());
+		DirTraverser dt(opt, std::make_shared<Matcher>(opt->block_size));
 		dt();
 	} catch(const std::exception &e) {
 		std::cerr << e.what() << std::endl;
