@@ -6,6 +6,7 @@
 #include <boost/filesystem/path.hpp>
 #include <boost/program_options.hpp>
 #include <boost/regex.hpp>
+#include <boost/crc.hpp>
 
 namespace po = boost::program_options;
 
@@ -33,7 +34,7 @@ struct ProgramOptions {
 			("file-size,s", po::value<int>(&file_size)->default_value(1), "Minimal file size")
 			("file,f", po::value<StringVec>(&filemasks), "File name mask")
 			("block-size,b", po::value<int>(&block_size)->default_value(1024), "Procedure block size")
-			("hash-algorithm,a", po::value<string>(&algorithm), "Algorithm: crc32, md5");
+			("hash-algorithm,a", po::value<string>(&algorithm)->default_value("crc16"), "Algorithm: crc16, crc32, xmodem, ccitt");
 
 		po::parsed_options parsed = po::command_line_parser(ac, av).options(desc).allow_unregistered().run();
 		po::store(parsed, var_map);
@@ -48,7 +49,7 @@ class Matcher {
 		string full_name;
 		size_t size;
 		std::ifstream stream;
-		StringVec spec;
+		std::vector<uint> spec;
 
 		File(const string &file, const size_t s) : full_name(file), size(s), stream(file) {}
 	};
@@ -56,7 +57,7 @@ class Matcher {
 	using FilePtr = std::shared_ptr<File>;
 
 public:
-	Matcher(const int block) : m_block_size(block) {}
+	Matcher(const int block, const string& hash) : m_block_size(block), m_hash(hash) {}
 
 	void AddFile(const string &filename, const size_t size) {
 		FilePtr new_file(new File(filename, size));
@@ -82,6 +83,7 @@ public:
 
 private:
 	int m_block_size;
+	string m_hash;
 	std::vector<std::vector<FilePtr>> m_files;
 
 	bool Cmp(FilePtr &first, FilePtr &second) {
@@ -99,7 +101,7 @@ private:
 			|| file->spec.size() * m_block_size < file->size;
 	}
 
-	string& GetSpec(FilePtr &file, const int ind) {
+	uint& GetSpec(FilePtr &file, const int ind) {
 		if (ind < file->spec.size())
 			return file->spec[ind];
 
@@ -111,12 +113,35 @@ private:
 			const int buf_size = end - start;
 			buf.resize(buf_size);
 			file->stream.read(&buf[0], buf_size);
-			std::cout << "Save spec for file: " << file->full_name << std::endl;
-			file->spec.push_back(buf);
+			file->spec.push_back(GetHash(buf, ind));
+			std::cout << "Save spec for file: " << file->full_name << " " << file->spec.back() << std::endl;
 			return file->spec.back();
 		}
 		std::cerr << "Fail read file " << file->full_name << std::endl;
 		throw;
+	}
+
+	uint GetHash(const string &buf, const int ind) {
+		if (m_hash == "crc16") {
+			boost::crc_16_type result;
+			result.process_bytes(&buf[0], ind + 1);
+			return result.checksum();
+		}
+		if (m_hash == "crc32") {
+			boost::crc_32_type result;
+			result.process_bytes(&buf[0], ind + 1);
+			return result.checksum();
+		}
+		if (m_hash == "xmodem") {
+			boost::crc_xmodem_type result;
+			result.process_bytes(&buf[0], ind + 1);
+			return result.checksum();
+		}
+		// if (m_hash == "ccitt") {
+			boost::crc_ccitt_type result;
+			result.process_bytes(&buf[0], ind + 1);
+			return result.checksum();
+		// }
 	}
 };
 
@@ -192,7 +217,7 @@ int main(int ac, char* av[]) {
 			std::cout << opt->desc << std::endl;
 			return 0;
 		}
-		DirTraverser dt(opt, std::make_shared<Matcher>(opt->block_size));
+		DirTraverser dt(opt, std::make_shared<Matcher>(opt->block_size, opt->algorithm));
 		dt();
 	} catch(const std::exception &e) {
 		std::cerr << e.what() << std::endl;
