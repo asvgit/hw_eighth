@@ -5,6 +5,7 @@
 #include <boost/filesystem/operations.hpp>
 #include <boost/filesystem/path.hpp>
 #include <boost/program_options.hpp>
+#include <boost/regex.hpp>
 
 namespace po = boost::program_options;
 
@@ -60,13 +61,13 @@ public:
 	void AddFile(const string &filename, const size_t size) {
 		FilePtr new_file(new File(filename, size));
 		for (auto &fv : m_files) {
-			for (auto &file : fv) {
-				if (Cmp(file, new_file)) {
-					fv.push_back(new_file);
-					return;
-				}
+			if (Cmp(fv.front(), new_file)) {
+				std::cout << "add to group of " << fv.front()->full_name  << " file" << new_file->full_name << std::endl;
+				fv.push_back(new_file);
+				return;
 			}
 		}
+		std::cout << "Make new group " << new_file->full_name << std::endl;
 		m_files.push_back(std::vector<FilePtr>());
 		m_files.back().push_back(new_file);
 	}
@@ -95,7 +96,7 @@ private:
 
 	bool HasSpec(FilePtr &file, const int ind) {
 		return file->spec.size() > ind
-			|| m_block_size * (ind + 1) <= file->size;
+			|| file->spec.size() * m_block_size < file->size;
 	}
 
 	string& GetSpec(FilePtr &file, const int ind) {
@@ -103,7 +104,7 @@ private:
 			return file->spec[ind];
 
 		if(file->stream.is_open()) {
-			int start = file->spec.size() * m_block_size + 1;
+			int start = file->spec.size() * m_block_size;
 			int end = std::min((file->spec.size() + 1) * m_block_size, file->size);
 			file->stream.seekg(start);
 			std::string buf;
@@ -138,7 +139,7 @@ public:
 				std::cerr << "Is not directory: " << d << std::endl;
 				continue;
 			}
-			if (m_opt->var_map.count("include-dir"))
+			if (m_opt->var_map.count("max-depth"))
 				TraverseDir(path, m_opt->max_depth);
 			else
 				TraverseDir(path);
@@ -146,28 +147,41 @@ public:
 
 		std::cout << "Print groups" << std::endl;
 		m_match->Print();
-		// if (m_opt->var_map.count("hash-algorithm")) {
-		//     std::cout << m_opt->algorithm << std::endl;
-		// }
 	}
 private:
 	OptPtr m_opt;
 	MatchPtr m_match;
 
 	void TraverseDir(const fs::path &dir, const int step = -1) {
-		std::cout << "Target dir: " << dir.filename() << std::endl;
+		std::cout << "Target dir: " << fs::canonical(dir) << std::endl;
 		fs::directory_iterator end_it;
 		for (fs::directory_iterator it(dir); it != end_it; ++it) {
-			std::cout << "\t" << it->path().filename() << std::endl;
-			if (fs::is_regular_file(it->path())) {
-				m_match->AddFile(it->path().filename().string(), fs::file_size(it->path()));
+			const string full_name = fs::canonical(it->path()).string();
+			std::cout << "\t" << fs::canonical(it->path()) << std::endl;
+			if (fs::is_regular_file(it->path())
+					&& fs::file_size(it->path()) > m_opt->file_size
+					&& CheckFileMasks(it->path().filename().string())) {
+				m_match->AddFile(full_name, fs::file_size(it->path()));
 				continue;
 			}
-			if (step && fs::is_directory(it->path())) {
+			if (step && fs::is_directory(it->path())
+					&& std::find(m_opt->exc_dir.begin(), m_opt->exc_dir.end(), full_name) == m_opt->exc_dir.end()) {
 				TraverseDir(it->path(), step - 1);
 			}
 
 		}
+	}
+
+	bool CheckFileMasks(const string &filename) {
+		if (!m_opt->var_map.count("file"))
+			return true;
+
+		for (auto &expr : m_opt->filemasks) {
+			boost::regex regex(expr);
+			if (boost::regex_match(filename, regex))
+				return true;
+		}
+		return false;
 	}
 };
 

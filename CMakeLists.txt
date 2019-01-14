@@ -4,7 +4,7 @@ project(bayan VERSION 0.0.$ENV{TRAVIS_BUILD_NUMBER})
 
 add_executable(bayan main.cpp)
 
-find_package(Boost COMPONENTS program_options filesystem system REQUIRED)
+find_package(Boost COMPONENTS program_options filesystem system regex REQUIRED)
 
 include_directories(${Boost_INCLUDE_DIR})
 
