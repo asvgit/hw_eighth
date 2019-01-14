@@ -113,7 +113,7 @@ private:
 			const int buf_size = end - start;
 			buf.resize(buf_size);
 			file->stream.read(&buf[0], buf_size);
-			file->spec.push_back(GetHash(buf, ind));
+			file->spec.push_back(GetHash((buf_size < m_block_size ? buf + string(m_block_size - buf_size, '\0') : buf), ind));
 			std::cout << "Save spec for file: " << file->full_name << " " << file->spec.back() << std::endl;
 			return file->spec.back();
 		}
