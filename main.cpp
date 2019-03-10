@@ -63,18 +63,20 @@ public:
 		FilePtr new_file(new File(filename, size));
 		for (auto &fv : m_files) {
 			if (Cmp(fv.front(), new_file)) {
-				std::cout << "add to group of " << fv.front()->full_name  << " file" << new_file->full_name << std::endl;
+				// std::cout << "add to group of " << fv.front()->full_name  << " file" << new_file->full_name << std::endl;
 				fv.push_back(new_file);
 				return;
 			}
 		}
-		std::cout << "Make new group " << new_file->full_name << std::endl;
+		// std::cout << "Make new group " << new_file->full_name << std::endl;
 		m_files.push_back(std::vector<FilePtr>());
 		m_files.back().push_back(new_file);
 	}
 
 	void Print() {
 		for (auto &vf : m_files) {
+			if (vf.size() < 2)
+				continue;
 			for (auto &f : vf)
 				std::cout << f->full_name << std::endl;
 			std::cout << std::endl;
@@ -87,6 +89,8 @@ private:
 	std::vector<std::vector<FilePtr>> m_files;
 
 	bool Cmp(FilePtr &first, FilePtr &second) {
+		if (first->size != second->size)
+			return false;
 		int i(0);
 		for (; HasSpec(first, i) && HasSpec(second, i); ++i)
 			if (GetSpec(first, i) != GetSpec(second, i))
@@ -114,7 +118,7 @@ private:
 			buf.resize(buf_size);
 			file->stream.read(&buf[0], buf_size);
 			file->spec.push_back(GetHash((buf_size < m_block_size ? buf + string(m_block_size - buf_size, '\0') : buf), ind));
-			std::cout << "Save spec for file: " << file->full_name << " " << file->spec.back() << std::endl;
+			// std::cout << "Save spec for file: " << file->full_name << " " << file->spec.back() << std::endl;
 			return file->spec.back();
 		}
 		std::cerr << "Fail read file " << file->full_name << std::endl;
@@ -170,7 +174,7 @@ public:
 				TraverseDir(path);
 		}
 
-		std::cout << "Print groups" << std::endl;
+		// std::cout << "Print groups" << std::endl;
 		m_match->Print();
 	}
 private:
@@ -178,11 +182,11 @@ private:
 	MatchPtr m_match;
 
 	void TraverseDir(const fs::path &dir, const int step = -1) {
-		std::cout << "Target dir: " << fs::canonical(dir) << std::endl;
+		// std::cout << "Target dir: " << fs::canonical(dir) << std::endl;
 		fs::directory_iterator end_it;
 		for (fs::directory_iterator it(dir); it != end_it; ++it) {
 			const string full_name = fs::canonical(it->path()).string();
-			std::cout << "\t" << fs::canonical(it->path()) << std::endl;
+			// std::cout << "\t" << fs::canonical(it->path()) << std::endl;
 			if (fs::is_regular_file(it->path())
 					&& fs::file_size(it->path()) > m_opt->file_size
 					&& CheckFileMasks(it->path().filename().string())) {
